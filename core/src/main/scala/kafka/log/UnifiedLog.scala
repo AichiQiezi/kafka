@@ -770,18 +770,21 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
     maybeFlushMetadataFile()
 
+    // 分析和验证待写入消息集合，并返回校验结果
     val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, !validateAndAssignOffsets, leaderEpoch)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
     if (appendInfo.validBytes <= 0) appendInfo
     else {
 
-      // trim any invalid bytes or partial messages before appending it to the on-disk log
+      // trim(整理，剪掉) any invalid bytes or partial（部分，不完全的） messages before appending it to the on-disk log
+      // 即删除无效的字节或部分消息
       var validRecords = trimInvalidBytes(records, appendInfo)
 
       // they are valid, insert them in the log
       lock synchronized {
         maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
+          // 确保 Log 对象未关闭
           localLog.checkIfMemoryMappedBufferClosed()
           if (validateAndAssignOffsets) {
             // assign offsets to the message set
@@ -823,7 +826,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               appendInfo.setLogAppendTime(validateAndOffsetAssignResult.logAppendTimeMs)
 
             // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
-            // format conversion)
+            // format conversion) 验证消息大小不超过限制！
             if (!ignoreRecordSize && validateAndOffsetAssignResult.messageSizeMaybeChanged) {
               validRecords.batches.forEach { batch =>
                 if (batch.sizeInBytes > config.maxMessageSize) {
@@ -838,6 +841,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             }
           } else {
             // we are taking the offsets we are given
+            // 直接使用给定的位移值、无需自己分配
             if (appendInfo.firstOrLastOffsetOfFirstBatch < localLog.logEndOffset) {
               // we may still be able to recover if the log is empty
               // one example: fetching from log start offset on the leader which is not batch aligned,
@@ -856,6 +860,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           }
 
           // update the epoch cache with the epoch stamped onto the message by the leader
+          // 更新 Leader Epoch
           validRecords.batches.forEach { batch =>
             if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
               maybeAssignEpochStartOffset(batch.partitionLeaderEpoch, batch.baseOffset)
@@ -876,7 +881,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               s"to partition $topicPartition, which exceeds the maximum configured segment size of ${config.segmentSize}.")
           }
 
-          // maybe roll the log if this segment is full
+          // maybe roll the log if this segment is full 当前日志段已满，需要创建一个新的日志段
           val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
           val logOffsetMetadata = new LogOffsetMetadata(
@@ -902,7 +907,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               // will be cleaned up after the log directory is recovered. Note that the end offset of the
               // ProducerStateManager will not be updated and the last stable offset will not advance
               // if the append to the transaction index fails.
+              // 执行真正的消息写入操作，调用日志段对象的 append 方法实现
               localLog.append(appendInfo.lastOffset, appendInfo.maxTimestamp, appendInfo.offsetOfMaxTimestamp, validRecords)
+
+              // 更新 LEO 对象，LEO 指向下一条消息要写入的偏移量
               updateHighWatermarkWithLogEndOffset()
 
               // update the producer state
@@ -928,8 +936,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 s"next offset: ${localLog.logEndOffset}, " +
                 s"and messages: $validRecords")
 
+              // 是否需要手动落盘，一般默认是交给操作系统完成
+              // 若要提高可靠性，可以使用此参数！
               if (localLog.unflushedMessages >= config.flushInterval) flush(false)
           }
+          // 返回写入结果
           appendInfo
         }
       }

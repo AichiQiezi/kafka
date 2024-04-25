@@ -41,18 +41,18 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.mockito.Mockito;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
-import org.openjdk.jmh.annotations.Warmup;
+//import org.openjdk.jmh.annotations.Benchmark;
+//import org.openjdk.jmh.annotations.BenchmarkMode;
+//import org.openjdk.jmh.annotations.Fork;
+//import org.openjdk.jmh.annotations.Level;
+//import org.openjdk.jmh.annotations.Measurement;
+//import org.openjdk.jmh.annotations.Mode;
+//import org.openjdk.jmh.annotations.OutputTimeUnit;
+//import org.openjdk.jmh.annotations.Scope;
+//import org.openjdk.jmh.annotations.Setup;
+//import org.openjdk.jmh.annotations.State;
+//import org.openjdk.jmh.annotations.TearDown;
+//import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.io.IOException;
@@ -69,12 +69,12 @@ import java.util.concurrent.TimeUnit;
 import scala.Option;
 import scala.compat.java8.OptionConverters;
 
-@State(Scope.Benchmark)
-@Fork(value = 1)
-@Warmup(iterations = 5)
-@Measurement(iterations = 15)
-@BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+//@State(Scope.Benchmark)
+//@Fork(value = 1)
+//@Warmup(iterations = 5)
+//@Measurement(iterations = 15)
+//@BenchmarkMode(Mode.AverageTime)
+//@OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class PartitionMakeFollowerBenchmark {
     private LogManager logManager;
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
@@ -86,7 +86,7 @@ public class PartitionMakeFollowerBenchmark {
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Option<Uuid> topicId;
 
-    @Setup(Level.Trial)
+//    @Setup(Level.Trial)
     public void setup() throws IOException {
         if (!logDir.mkdir())
             throw new IOException("error creating test directory");
@@ -118,7 +118,7 @@ public class PartitionMakeFollowerBenchmark {
         TopicPartition tp = new TopicPartition("topic", 0);
         topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
 
-        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
+//        Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100,
@@ -140,7 +140,7 @@ public class PartitionMakeFollowerBenchmark {
         });
     }
 
-    @TearDown(Level.Trial)
+//    @TearDown(Level.Trial)
     public void tearDown() throws IOException, InterruptedException {
         executorService.shutdownNow();
         logManager.shutdown(-1L);
@@ -148,7 +148,7 @@ public class PartitionMakeFollowerBenchmark {
         Utils.delete(logDir);
     }
 
-    @Benchmark
+//    @Benchmark
     public boolean testMakeFollower() {
         LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
             .setControllerEpoch(0)
