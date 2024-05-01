@@ -428,6 +428,7 @@ class RequestChannel(val queueSize: Int,
 
   /** Send a response back to the socket server to be sent over the network */
   private[network] def sendResponse(response: RequestChannel.Response): Unit = {
+    // 构造 Trace 日志输出字符串
     if (isTraceEnabled) {
       val requestHeader = response.request.headerForLoggingOrThrottling()
       val message = response match {
@@ -460,6 +461,7 @@ class RequestChannel(val queueSize: Int,
       case _: StartThrottlingResponse | _: EndThrottlingResponse => ()
     }
 
+    // 找出 response 对应的 Processor 线程，即 request 当初是由哪个 Processor 线程处理的
     val processor = processors.get(response.processor)
     // The processor may be null if it was shutdown. In this case, the connections
     // are closed, so the response is dropped.
@@ -519,14 +521,19 @@ object RequestMetrics {
   val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
 
   val verifyPartitionsInTxnMetricName = ApiKeys.ADD_PARTITIONS_TO_TXN.name + "Verification"
-
+  // 每秒处理的 Request 数
   val RequestsPerSec = "RequestsPerSec"
+  // 计算 Request 在 Request Queue 中的平均等待时间，若此时间过长，需要增加后端 I/O 线程的数量
   val RequestQueueTimeMs = "RequestQueueTimeMs"
+  // 计算 Request 实际被处理的时间，若过长，需要看处理逻辑是否出现问题
   val LocalTimeMs = "LocalTimeMs"
+  // Kafka 的读写请求（PRODUCE 请求和 FETCH 请求）逻辑涉及等待其他 Broker 操作的步骤
+  // Kafka 生产环境中设置 acks=all 的 Produce r程序发送消息延时高的主要原因，往往就是 Remote Time 高
   val RemoteTimeMs = "RemoteTimeMs"
   val ThrottleTimeMs = "ThrottleTimeMs"
   val ResponseQueueTimeMs = "ResponseQueueTimeMs"
   val ResponseSendTimeMs = "ResponseSendTimeMs"
+  // 计算 Request 被处理的完整流程时间。这是最实用的监控指标，没有之一
   val TotalTimeMs = "TotalTimeMs"
   val RequestBytes = "RequestBytes"
   val MessageConversionsTimeMs = "MessageConversionsTimeMs"

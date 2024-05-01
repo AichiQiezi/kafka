@@ -50,6 +50,7 @@ public class SimpleMemoryPool implements MemoryPool {
         this.oomTimeSensor = oomPeriodSensor;
     }
 
+    // 内存池的原理是基于原子类来实现的。同时对于内存分配存在严格和不严格模式
     @Override
     public ByteBuffer tryAllocate(int sizeBytes) {
         if (sizeBytes < 1)
@@ -70,6 +71,7 @@ public class SimpleMemoryPool implements MemoryPool {
         }
 
         if (success) {
+            // 用于收集内存不足的数据，便于后续监控分析等
             maybeRecordEndOfDrySpell();
         } else {
             if (oomTimeSensor != null) {

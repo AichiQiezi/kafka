@@ -26,18 +26,18 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Warmup;
+//import org.openjdk.jmh.annotations.Benchmark;
+//import org.openjdk.jmh.annotations.BenchmarkMode;
+//import org.openjdk.jmh.annotations.Fork;
+//import org.openjdk.jmh.annotations.Level;
+//import org.openjdk.jmh.annotations.Measurement;
+//import org.openjdk.jmh.annotations.Mode;
+//import org.openjdk.jmh.annotations.OutputTimeUnit;
+//import org.openjdk.jmh.annotations.Param;
+//import org.openjdk.jmh.annotations.Scope;
+//import org.openjdk.jmh.annotations.Setup;
+//import org.openjdk.jmh.annotations.State;
+//import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -46,18 +46,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-@State(Scope.Benchmark)
-@Fork(value = 1)
-@Warmup(iterations = 5)
-@Measurement(iterations = 15)
-@BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+//@State(Scope.Benchmark)
+//@Fork(value = 1)
+//@Warmup(iterations = 5)
+//@Measurement(iterations = 15)
+//@BenchmarkMode(Mode.AverageTime)
+//@OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class FetchRequestBenchmark {
 
-    @Param({"10", "500", "1000"})
+//    @Param({"10", "500", "1000"})
     private int topicCount;
 
-    @Param({"3", "10", "20"})
+//    @Param({"3", "10", "20"})
     private int partitionCount;
 
     Map<TopicPartition, FetchRequest.PartitionData> fetchData;
@@ -72,7 +72,7 @@ public class FetchRequestBenchmark {
 
     ByteBuffer requestBuffer;
 
-    @Setup(Level.Trial)
+//    @Setup(Level.Trial)
     public void setup() {
         this.fetchData = new HashMap<>();
         this.topicNames = new HashMap<>();
@@ -96,19 +96,19 @@ public class FetchRequestBenchmark {
 
     }
 
-    @Benchmark
+//    @Benchmark
     public short testFetchRequestFromBuffer() {
         return AbstractRequest.parseRequest(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), requestBuffer).request.version();
     }
 
-    @Benchmark
+//    @Benchmark
     public int testFetchRequestForConsumer() {
         FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 0, fetchData)
             .build(ApiKeys.FETCH.latestVersion());
         return fetchRequest.fetchData(topicNames).size();
     }
 
-    @Benchmark
+//    @Benchmark
     public int testFetchRequestForReplica() {
         FetchRequest fetchRequest = FetchRequest.Builder.forReplica(
             ApiKeys.FETCH.latestVersion(), 1, 1, 0, 0, fetchData)
@@ -116,7 +116,7 @@ public class FetchRequestBenchmark {
         return fetchRequest.fetchData(topicNames).size();
     }
 
-    @Benchmark
+//    @Benchmark
     public int testSerializeFetchRequestForConsumer() throws IOException {
         Send send = consumerRequest.toSend(header);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
@@ -124,7 +124,7 @@ public class FetchRequestBenchmark {
         return channel.buffer().limit();
     }
 
-    @Benchmark
+//    @Benchmark
     public int testSerializeFetchRequestForReplica() throws IOException {
         Send send = replicaRequest.toSend(header);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
@@ -132,7 +132,7 @@ public class FetchRequestBenchmark {
         return channel.buffer().limit();
     }
 
-    @Benchmark
+//    @Benchmark
     public String testRequestToJson() {
         return RequestConvertToJson.request(consumerRequest).toString();
     }

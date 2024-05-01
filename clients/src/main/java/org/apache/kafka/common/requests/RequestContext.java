@@ -34,12 +34,19 @@ import java.util.Optional;
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
 
 public class RequestContext implements AuthorizableRequestContext {
+    // Request 头部信息，主要是用户不可见的元数据信息，如 Request 类型、API 版本、Client Id 等
     public final RequestHeader header;
+    // Request 发送方的 TCP 连接串标识
     public final String connectionId;
+    // 发送方的 IP
     public final InetAddress clientAddress;
+    // Kafka用户认证类，用于认证授权
     public final KafkaPrincipal principal;
+    // 监听器名称，可以是预定义的监听器（如 PLAINTEXT），也可自行定义
     public final ListenerName listenerName;
+    // 安全协议类型：PLAINTEXT（明文）、SSL
     public final SecurityProtocol securityProtocol;
+    // 用户自定义的一些连接方信息
     public final ClientInformation clientInformation;
     public final boolean fromPrivilegedListener;
     public final Optional<KafkaPrincipalSerde> principalSerde;
@@ -83,17 +90,20 @@ public class RequestContext implements AuthorizableRequestContext {
         this.principalSerde = principalSerde;
     }
 
+    // 从给定的 ByteBuffer 中提取 Request 和对应的 Size 值
     public RequestAndSize parseRequest(ByteBuffer buffer) {
         if (isUnsupportedApiVersionsRequest()) {
-            // Unsupported ApiVersion requests are treated as v0 requests and are not parsed
+            // Unsupported ApiVersion requests are treated as (被看作) v0 requests and are not parsed
             ApiVersionsRequest apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), (short) 0, header.apiVersion());
             return new RequestAndSize(apiVersionsRequest, 0);
         } else {
             ApiKeys apiKey = header.apiKey();
             try {
                 short apiVersion = header.apiVersion();
+                // 解析请求
                 return AbstractRequest.parseRequest(apiKey, apiVersion, buffer);
             } catch (Throwable ex) {
+                // 解析过程中出现任何问题都视为无效请求，抛出异常！
                 throw new InvalidRequestException("Error getting request for apiKey: " + apiKey +
                         ", apiVersion: " + header.apiVersion() +
                         ", connectionId: " + connectionId +

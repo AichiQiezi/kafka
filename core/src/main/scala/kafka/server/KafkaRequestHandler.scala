@@ -104,7 +104,7 @@ class KafkaRequestHandler(
       // time_window is independent of the number of threads, each recorded idle
       // time should be discounted by # threads.
       val startSelectTime = time.nanoseconds
-
+      // 从请求队列中获取下一个待处理的请求
       val req = requestChannel.receiveRequest(300)
       val endTime = time.nanoseconds
       val idleTime = endTime - startSelectTime
@@ -112,6 +112,7 @@ class KafkaRequestHandler(
 
       req match {
         case RequestChannel.ShutdownRequest =>
+          // 关闭请求
           debug(s"Kafka request handler $id on broker $brokerId received shut down command")
           completeShutdown()
           return
@@ -148,6 +149,7 @@ class KafkaRequestHandler(
 
         case request: RequestChannel.Request =>
           try {
+            // 普通请求
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
             threadCurrentRequest.set(request)
@@ -187,6 +189,10 @@ class KafkaRequestHandler(
 
 }
 
+// brokerId：所属 Broker 的序号
+// requestChannel：请求队列
+// apis：实际请求处理逻辑类
+// numThread：I/O 线程池初始大小
 class KafkaRequestHandlerPool(
   val brokerId: Int,
   val requestChannel: RequestChannel,
@@ -198,7 +204,7 @@ class KafkaRequestHandlerPool(
   nodeName: String = "broker"
 ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
-
+  // 包装为原子类对象，保证多线程访问的线程安全性，因为这个配置可能会动态变化！
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
   /* a meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
@@ -404,7 +410,7 @@ object BrokerTopicStats {
   val InvalidOffsetOrSequenceRecordsPerSec = "InvalidOffsetOrSequenceRecordsPerSec"
 }
 
-class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Optional.empty()) extends Logging {
+class BrokerTopicStats (configOpt: java.util.Optional[KafkaConfig] = java.util.Optional.empty()) extends Logging {
 
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k), configOpt)
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
