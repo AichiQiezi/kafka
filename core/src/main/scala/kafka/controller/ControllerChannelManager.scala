@@ -6,14 +6,14 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.controller
 
 import com.yammer.metrics.core.{Gauge, Timer}
@@ -55,6 +55,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
                                metrics: Metrics,
                                stateChangeLogger: StateChangeLogger,
                                threadNamePrefix: Option[String] = None) extends Logging {
+
   import ControllerChannelManager._
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
@@ -69,7 +70,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     }
   )
 
-  def startup(initialBrokers: Set[Broker]):Unit = {
+  def startup(initialBrokers: Set[Broker]): Unit = {
     initialBrokers.foreach(addNewBroker)
 
     brokerLock synchronized {
@@ -77,7 +78,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     }
   }
 
-  def shutdown():Unit = {
+  def shutdown(): Unit = {
     brokerLock synchronized {
       brokerStateInfo.values.toList.foreach(removeExistingBroker)
     }
@@ -115,10 +116,12 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   }
 
   private def addNewBroker(broker: Broker): Unit = {
+    // 为该 Broker 构造请求阻塞队列
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug(s"Controller ${config.brokerId} trying to connect to broker ${broker.id}")
     val controllerToBrokerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
     val controllerToBrokerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+    // 获取 broker 的节点对象信息
     val brokerNode = broker.node(controllerToBrokerListenerName)
     val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
     val (networkClient, reconfigurableChannelBuilder) = {
@@ -138,6 +141,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
           Some(reconfigurable)
         case _ => None
       }
+      // 创建 Selector 用于网络数据传输
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
         Selector.NO_IDLE_TIMEOUT_MS,
@@ -149,6 +153,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
         channelBuilder,
         logContext
       )
+      // networkClient 示例提供丰富的方法实现网络层 IO 数据传输
       val networkClient = new NetworkClient(
         selector,
         new ManualMetadataUpdater(Seq(brokerNode).asJava),
@@ -172,17 +177,18 @@ class ControllerChannelManager(controllerEpoch: () => Int,
       case None => s"Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
       case Some(name) => s"$name:Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
     }
-
+    // 构造请求处理速率监控指标
     val requestRateAndQueueTimeMetrics = metricsGroup.newTimer(
       RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTags(broker.id)
     )
-
+    // 创建RequestSendThread实例
     val requestThread = new RequestSendThread(config.brokerId, controllerEpoch, messageQueue, networkClient,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
     val queueSizeGauge = metricsGroup.newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
-
+    // 创建该 Broker 专属的 ControllerBrokerStateInfo 实例
+    // 并将其加入到brokerStateInfo统一管理
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
   }
@@ -238,6 +244,7 @@ class RequestSendThread(val controllerId: Int,
 
     def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
+    // 以阻塞的方式获取从阻塞队列中取出数据
     val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
     requestRateAndQueueTimeMetrics.update(time.milliseconds() - enqueueTimeMs, TimeUnit.MILLISECONDS)
 
@@ -248,13 +255,16 @@ class RequestSendThread(val controllerId: Int,
         // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
         // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
         try {
+          // 如果没有创建与目标 Broker 的 TCP 连接，或连接暂时不可用
           if (!brokerReady()) {
             isSendSuccessful = false
+            // 等待重试，减少 CPU 负担
             backoff()
           }
           else {
             val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
               time.milliseconds(), true)
+            // 发送请求，等待接收结果
             clientResponse = NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
             isSendSuccessful = true
           }
@@ -263,14 +273,17 @@ class RequestSendThread(val controllerId: Int,
             warn(s"Controller $controllerId epoch ${controllerEpoch()} fails to send request " +
               s"$requestBuilder " +
               s"to broker $brokerNode. Reconnecting to broker.", e)
+            // 如果出现异常，关闭与对应 Broker 的连接
             networkClient.close(brokerNode.idString)
             isSendSuccessful = false
             backoff()
         }
       }
+      // 如果接收到了响应
       if (clientResponse != null) {
         val requestHeader = clientResponse.requestHeader
         val api = requestHeader.apiKey
+        // 此 Response 的请求类型必须是 LeaderAndIsrRequest、StopReplicaRequest 或 UpdateMetadataRequest 中的一种
         if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA)
           throw new KafkaException(s"Unexpected apiKey received: $apiKey")
 
@@ -320,12 +333,12 @@ class RequestSendThread(val controllerId: Int,
 }
 
 class ControllerBrokerRequestBatch(
-  config: KafkaConfig,
-  controllerChannelManager: ControllerChannelManager,
-  controllerEventManager: ControllerEventManager,
-  controllerContext: ControllerContext,
-  stateChangeLogger: StateChangeLogger
-) extends AbstractControllerBrokerRequestBatch(
+                                    config: KafkaConfig,
+                                    controllerChannelManager: ControllerChannelManager,
+                                    controllerEventManager: ControllerEventManager,
+                                    controllerContext: ControllerContext,
+                                    stateChangeLogger: StateChangeLogger
+                                  ) extends AbstractControllerBrokerRequestBatch(
   config,
   () => controllerContext,
   () => config.interBrokerProtocolVersion,
@@ -335,6 +348,7 @@ class ControllerBrokerRequestBatch(
   def sendEvent(event: ControllerEvent): Unit = {
     controllerEventManager.put(event)
   }
+
   def sendRequest(brokerId: Int,
                   request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null): Unit = {
@@ -359,13 +373,14 @@ class ControllerBrokerRequestBatch(
 /**
  * Structure to send RPCs from controller to broker to inform about the metadata and leadership
  * changes in the system.
- * @param config Kafka config present in the controller.
- * @param metadataProvider Provider to provide the relevant metadata to build the state needed to
- *                         send RPCs
+ *
+ * @param config                  Kafka config present in the controller.
+ * @param metadataProvider        Provider to provide the relevant metadata to build the state needed to
+ *                                send RPCs
  * @param metadataVersionProvider Provider to provide the metadata version used by the controller.
- * @param stateChangeLogger logger to log the various events while sending requests and receiving
- *                          responses from the brokers
- * @param kraftController whether the controller is KRaft controller
+ * @param stateChangeLogger       logger to log the various events while sending requests and receiving
+ *                                responses from the brokers
+ * @param kraftController         whether the controller is KRaft controller
  */
 abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     metadataProvider: () => ControllerChannelContext,
@@ -456,9 +471,9 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       val result = stopReplicaRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
       val alreadyDelete = result.get(topicPartition).exists(_.deletePartition)
       result.put(topicPartition, new StopReplicaPartitionState()
-          .setPartitionIndex(topicPartition.partition())
-          .setLeaderEpoch(leaderEpoch)
-          .setDeletePartition(alreadyDelete || deletePartition))
+        .setPartitionIndex(topicPartition.partition())
+        .setLeaderEpoch(leaderEpoch)
+        .setDeletePartition(alreadyDelete || deletePartition))
     }
   }
 
@@ -652,7 +667,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
       stopReplicaResponse.partitionErrors.forEach { pe =>
         val tp = new TopicPartition(pe.topicName, pe.partitionIndex)
         if (metadataInstance.isTopicDeletionInProgress(pe.topicName) &&
-            isPartitionDeleted(tp)) {
+          isPartitionDeleted(tp)) {
           partitionErrorsForDeletingTopics += tp -> Errors.forCode(pe.errorCode)
         }
       }

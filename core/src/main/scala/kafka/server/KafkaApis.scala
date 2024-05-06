@@ -176,6 +176,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         throw new IllegalStateException(s"API ${request.header.apiKey} with version ${request.header.apiVersion} is not enabled")
       }
 
+      // 根据请求头部信息中的 APIKEY 字段来判断属于哪类请求，调用对应的 handle 方法
+      // 如果新增 RPC 协议类型，则：
+      // 1. 添加新的 APIKEY 标识新请求类型
+      // 2. 添加新的 CASE
+      // 3. 添加对应的 handle 方法
       request.header.apiKey match {
         case ApiKeys.PRODUCE => handleProduceRequest(request, requestLocal)
         case ApiKeys.FETCH => handleFetchRequest(request)
@@ -248,7 +253,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
+      // 致命错误，抛出异常
       case e: FatalExitError => throw e
+      // 普通异常，记录错误日志
       case e: Throwable => handleError(e)
     } finally {
       // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
@@ -257,6 +264,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Delayed fetches are also completed by ReplicaFetcherThread.
       replicaManager.tryCompleteActions()
       // The local completion time may be set while processing the request. Only record it if it's unset.
+      // 记录一下请求本地完成时间
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
     }
@@ -1677,6 +1685,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleListGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val listGroupsRequest = request.body[ListGroupsRequest]
+    // 如果 Clients 具备 CLUSTER 资源的 DESCRIBE 权限
     val hasClusterDescribe = authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
 
     groupCoordinator.listGroups(
