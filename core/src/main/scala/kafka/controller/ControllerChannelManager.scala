@@ -181,14 +181,14 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     val requestRateAndQueueTimeMetrics = metricsGroup.newTimer(
       RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTags(broker.id)
     )
-    // 创建RequestSendThread实例
+    // 创建 RequestSendThread 实例
     val requestThread = new RequestSendThread(config.brokerId, controllerEpoch, messageQueue, networkClient,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
     val queueSizeGauge = metricsGroup.newGauge(QueueSizeMetricName, () => messageQueue.size, brokerMetricTags(broker.id))
     // 创建该 Broker 专属的 ControllerBrokerStateInfo 实例
-    // 并将其加入到brokerStateInfo统一管理
+    // 并将其加入到 brokerStateInfo 统一管理
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
       requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
   }
