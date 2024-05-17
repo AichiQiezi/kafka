@@ -556,9 +556,13 @@ object PartitionLeaderElectionAlgorithms {
 }
 
 sealed trait PartitionLeaderElectionStrategy
+// 离线分区 Leader 选举策略
 final case class OfflinePartitionLeaderElectionStrategy(allowUnclean: Boolean) extends PartitionLeaderElectionStrategy
+//分区副本重分配 Leader 选举策略
 final case object ReassignPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+// 分区 Preferred 副本 Leader 选举策略
 final case object PreferredReplicaPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+// Broker Controlled 关闭时 Leader 选举策略
 final case object ControlledShutdownPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 
 sealed trait PartitionState {
